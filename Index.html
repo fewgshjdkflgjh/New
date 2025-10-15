@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Train Tracker Map</title>
+<title>Train Tracker Smooth Map</title>
 <style>
   body {
     background: #cfe6ff;
@@ -31,53 +31,91 @@
 </style>
 </head>
 <body>
-<h1>🚆 Train Network Map</h1>
+<h1>🚆 Train Tracker Smooth Map</h1>
 <canvas id="map" width="900" height="900"></canvas>
 
 <script>
-  const canvas = document.getElementById('map');
-  const ctx = canvas.getContext('2d');
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
 
-  // Fetch the JSON file
-  fetch('tracks.json')
+const scale = 0.2;
+const offsetX = 450;
+const offsetY = 450;
+
+let tracks = [];
+let trainPos = null;
+
+// Helper to draw smooth curves
+function drawSmoothPath(ctx, points) {
+  if (points.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const current = points[i];
+    const next = points[i + 1];
+    const cx = (current.x + next.x) / 2;
+    const cy = (current.y + next.y) / 2;
+    ctx.quadraticCurveTo(current.x, current.y, cx, cy);
+  }
+  ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+  ctx.stroke();
+}
+
+// Draw entire map
+function drawMap() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Convert 3D positions to 2D map
+  const mapped = tracks.map(p => ({
+    x: p.x * scale + offsetX,
+    y: -p.z * scale + offsetY
+  }));
+
+  // Draw smooth line
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = 3;
+  drawSmoothPath(ctx, mapped);
+
+  // Draw points
+  ctx.fillStyle = '#ff3b3b';
+  mapped.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Draw train
+  if (trainPos) {
+    const x = trainPos.x * scale + offsetX;
+    const y = -trainPos.z * scale + offsetY;
+    ctx.fillStyle = 'yellow';
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.stroke();
+  }
+}
+
+// Load track data
+fetch('tracks.json')
+  .then(res => res.json())
+  .then(data => {
+    tracks = data;
+    drawMap();
+  });
+
+// Update train every 100 ms
+setInterval(() => {
+  fetch('train.json')
     .then(res => res.json())
-    .then(points => {
-      if (points.length < 2) {
-        alert("Not enough points in tracks.json");
-        return;
-      }
-
-      // Auto-center and scale
-      const scale = 0.2; // smaller = zoom out, larger = zoom in
-      const offsetX = 450;
-      const offsetY = 450;
-
-      ctx.strokeStyle = '#222';
-      ctx.lineWidth = 3;
-
-      ctx.beginPath();
-      for (let i = 0; i < points.length; i++) {
-        const x = points[i].x * scale + offsetX;
-        const y = -points[i].z * scale + offsetY; // invert Z so north is up
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-
-      // Draw points
-      ctx.fillStyle = 'red';
-      points.forEach(p => {
-        const x = p.x * scale + offsetX;
-        const y = -p.z * scale + offsetY;
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fill();
-      });
+    .then(data => {
+      trainPos = data;
+      drawMap();
     })
-    .catch(err => {
-      console.error(err);
-      alert("Couldn't load tracks.json");
-    });
+    .catch(() => {});
+}, 100);
 </script>
 </body>
 </html>
