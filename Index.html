@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Train Tracker Smooth Map</title>
+<title>Train Tracker — Thick Tracks</title>
 <style>
   body {
     background: #cfe6ff;
@@ -14,15 +14,16 @@
   }
   h1 {
     margin: 10px 0;
+    font-size: 28px;
   }
   #map {
     position: relative;
-    width: 900px;
-    height: 900px;
+    width: 1500px;
+    height: 1000px;
     background: #b3d1ff;
     margin: 0 auto;
     overflow: hidden;
-    border: 2px solid #333;
+    border: 3px solid #222;
   }
   canvas {
     width: 100%;
@@ -31,38 +32,58 @@
 </style>
 </head>
 <body>
-<h1>🚆 Train Tracker Smooth Map</h1>
-<canvas id="map" width="900" height="900"></canvas>
+<h1>🚄 Train Tracker — Thick Tracks View</h1>
+<canvas id="map" width="1500" height="1000"></canvas>
 
 <script>
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
 
-const scale = 0.2;
-const offsetX = 450;
-const offsetY = 450;
+// Larger map scale and offsets
+const scale = 0.5;
+const offsetX = canvas.width / 2;
+const offsetY = canvas.height / 2;
 
 let tracks = [];
 let trainPos = null;
 
-// Draw smooth curves between points
-function drawSmoothPath(ctx, points) {
+// Draw a smooth rail with thick double lines
+function drawSmoothTrack(ctx, points) {
   if (points.length < 2) return;
+
+  // Draw the outer track lines (left/right rail)
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = '#222';
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
 
   for (let i = 0; i < points.length - 1; i++) {
-    const current = points[i];
-    const next = points[i + 1];
-    const cx = (current.x + next.x) / 2;
-    const cy = (current.y + next.y) / 2;
-    ctx.quadraticCurveTo(current.x, current.y, cx, cy);
+    const c = points[i];
+    const n = points[i + 1];
+    const cx = (c.x + n.x) / 2;
+    const cy = (c.y + n.y) / 2;
+    ctx.quadraticCurveTo(c.x, c.y, cx, cy);
+  }
+  ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+  ctx.stroke();
+
+  // Add faint gray inner shading for detail
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 0; i < points.length - 1; i++) {
+    const c = points[i];
+    const n = points[i + 1];
+    const cx = (c.x + n.x) / 2;
+    const cy = (c.y + n.y) / 2;
+    ctx.quadraticCurveTo(c.x, c.y, cx, cy);
   }
   ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
   ctx.stroke();
 }
 
-// Draw the whole map
+// Redraw map + train
 function drawMap() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -71,20 +92,19 @@ function drawMap() {
     y: -p.z * scale + offsetY
   }));
 
-  // Draw smooth rail line
-  ctx.strokeStyle = '#222';
-  ctx.lineWidth = 3;
-  drawSmoothPath(ctx, mapped);
+  // Draw the thick smooth track
+  drawSmoothTrack(ctx, mapped);
 
-  // Draw the train
+  // Draw train
   if (trainPos) {
     const x = trainPos.x * scale + offsetX;
     const y = -trainPos.z * scale + offsetY;
-    ctx.fillStyle = 'yellow';
+    ctx.fillStyle = '#ffcc00';
     ctx.beginPath();
-    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.arc(x, y, 18, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
     ctx.stroke();
   }
 }
