@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Train Tracker — Thick Tracks</title>
+<title>Train Tracker — Zoom + Pan</title>
 <style>
   body {
     background: #cfe6ff;
@@ -11,52 +11,68 @@
     text-align: center;
     margin: 0;
     padding: 0;
+    overflow: hidden;
   }
   h1 {
     margin: 10px 0;
     font-size: 28px;
   }
-  #map {
+  #mapContainer {
     position: relative;
-    width: 1500px;
-    height: 1000px;
-    background: #b3d1ff;
+    width: 100vw;
+    height: 90vh;
     margin: 0 auto;
+    background: #b3d1ff;
     overflow: hidden;
     border: 3px solid #222;
   }
   canvas {
     width: 100%;
     height: 100%;
+    cursor: grab;
+  }
+  canvas:active {
+    cursor: grabbing;
   }
 </style>
 </head>
 <body>
-<h1>🚄 Train Tracker — Thick Tracks View</h1>
-<canvas id="map" width="1500" height="1000"></canvas>
+<h1>🚄 Train Tracker — Zoom + Pan</h1>
+<div id="mapContainer">
+  <canvas id="map" width="1920" height="1080"></canvas>
+</div>
 
 <script>
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
 
-// Larger map scale and offsets
-const scale = 0.5;
-const offsetX = canvas.width / 2;
-const offsetY = canvas.height / 2;
-
+// Track & train data
 let tracks = [];
 let trainPos = null;
 
-// Draw a smooth rail with thick double lines
+// View settings
+let scale = 0.4;          // zoom level
+let offsetX = canvas.width / 2;
+let offsetY = canvas.height / 2;
+
+// Drag variables
+let isDragging = false;
+let lastMouseX, lastMouseY;
+
+// ===== DRAWING FUNCTIONS =====
+
+// Draw smooth curve with thick rails
 function drawSmoothTrack(ctx, points) {
   if (points.length < 2) return;
 
-  // Draw the outer track lines (left/right rail)
-  ctx.lineWidth = 8;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  // Outer black rail
+  ctx.lineWidth = 8 * scale;
   ctx.strokeStyle = '#222';
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
-
   for (let i = 0; i < points.length - 1; i++) {
     const c = points[i];
     const n = points[i + 1];
@@ -67,9 +83,9 @@ function drawSmoothTrack(ctx, points) {
   ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
   ctx.stroke();
 
-  // Add faint gray inner shading for detail
+  // Inner gray detail
+  ctx.lineWidth = 4 * scale;
   ctx.strokeStyle = '#666';
-  ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
   for (let i = 0; i < points.length - 1; i++) {
@@ -83,33 +99,78 @@ function drawSmoothTrack(ctx, points) {
   ctx.stroke();
 }
 
-// Redraw map + train
+// Redraw everything
 function drawMap() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const mapped = tracks.map(p => ({
-    x: p.x * scale + offsetX,
-    y: -p.z * scale + offsetY
-  }));
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, scale);
 
-  // Draw the thick smooth track
+  const mapped = tracks.map(p => ({ x: p.x, y: -p.z }));
+
   drawSmoothTrack(ctx, mapped);
 
-  // Draw train
   if (trainPos) {
-    const x = trainPos.x * scale + offsetX;
-    const y = -trainPos.z * scale + offsetY;
+    const x = trainPos.x;
+    const y = -trainPos.z;
     ctx.fillStyle = '#ffcc00';
     ctx.beginPath();
-    ctx.arc(x, y, 18, 0, Math.PI * 2);
+    ctx.arc(x, y, 25 / scale, 0, Math.PI * 2);
     ctx.fill();
+    ctx.lineWidth = 3 / scale;
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3;
     ctx.stroke();
   }
+
+  ctx.restore();
 }
 
-// Load track data
+// ===== INTERACTION =====
+
+// Zoom with scroll
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const zoomSpeed = 0.1;
+  const prevScale = scale;
+  if (e.deltaY < 0) scale *= 1 + zoomSpeed;
+  else scale *= 1 - zoomSpeed;
+
+  // Clamp zoom
+  scale = Math.max(0.1, Math.min(3, scale));
+
+  // Zoom toward cursor
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  const dx = mouseX - offsetX;
+  const dy = mouseY - offsetY;
+  offsetX -= dx * (scale / prevScale - 1);
+  offsetY -= dy * (scale / prevScale - 1);
+
+  drawMap();
+});
+
+// Drag to move view
+canvas.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+window.addEventListener('mouseup', () => isDragging = false);
+canvas.addEventListener('mousemove', (e) => {
+  if (isDragging) {
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
+    offsetX += dx;
+    offsetY += dy;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    drawMap();
+  }
+});
+
+// ===== DATA =====
 fetch('tracks.json')
   .then(res => res.json())
   .then(data => {
@@ -117,7 +178,7 @@ fetch('tracks.json')
     drawMap();
   });
 
-// Update train every 100 ms
+// Update train position
 setInterval(() => {
   fetch('train.json')
     .then(res => res.json())
