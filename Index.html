@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Train Tracker Map</title>
+<style>
+  body {
+    background: #cfe6ff;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+  }
+  h1 {
+    margin: 10px 0;
+  }
+  #map {
+    position: relative;
+    width: 900px;
+    height: 900px;
+    background: #b3d1ff;
+    margin: 0 auto;
+    overflow: hidden;
+    border: 2px solid #333;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+</head>
+<body>
+<h1>🚆 Train Network Map</h1>
+<canvas id="map" width="900" height="900"></canvas>
+
+<script>
+  const canvas = document.getElementById('map');
+  const ctx = canvas.getContext('2d');
+
+  // Fetch the JSON file
+  fetch('tracks.json')
+    .then(res => res.json())
+    .then(points => {
+      if (points.length < 2) {
+        alert("Not enough points in tracks.json");
+        return;
+      }
+
+      // Auto-center and scale
+      const scale = 0.2; // smaller = zoom out, larger = zoom in
+      const offsetX = 450;
+      const offsetY = 450;
+
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 3;
+
+      ctx.beginPath();
+      for (let i = 0; i < points.length; i++) {
+        const x = points[i].x * scale + offsetX;
+        const y = -points[i].z * scale + offsetY; // invert Z so north is up
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Draw points
+      ctx.fillStyle = 'red';
+      points.forEach(p => {
+        const x = p.x * scale + offsetX;
+        const y = -p.z * scale + offsetY;
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    })
+    .catch(err => {
+      console.error(err);
+      alert("Couldn't load tracks.json");
+    });
+</script>
+</body>
+</html>
