@@ -45,7 +45,7 @@ const offsetY = 450;
 let tracks = [];
 let trainPos = null;
 
-// Helper to draw smooth curves
+// Draw smooth curves between points
 function drawSmoothPath(ctx, points) {
   if (points.length < 2) return;
   ctx.beginPath();
@@ -62,30 +62,21 @@ function drawSmoothPath(ctx, points) {
   ctx.stroke();
 }
 
-// Draw entire map
+// Draw the whole map
 function drawMap() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Convert 3D positions to 2D map
   const mapped = tracks.map(p => ({
     x: p.x * scale + offsetX,
     y: -p.z * scale + offsetY
   }));
 
-  // Draw smooth line
+  // Draw smooth rail line
   ctx.strokeStyle = '#222';
   ctx.lineWidth = 3;
   drawSmoothPath(ctx, mapped);
 
-  // Draw points
-  ctx.fillStyle = '#ff3b3b';
-  mapped.forEach(p => {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  // Draw train
+  // Draw the train
   if (trainPos) {
     const x = trainPos.x * scale + offsetX;
     const y = -trainPos.z * scale + offsetY;
