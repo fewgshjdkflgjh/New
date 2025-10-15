@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Train Tracker — Zoom + Pan</title>
+<title>Train Tracker — Touch & Zoom</title>
 <style>
   body {
     background: #cfe6ff;
@@ -12,24 +12,28 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
+    user-select: none;
+    touch-action: none;
   }
   h1 {
     margin: 10px 0;
-    font-size: 28px;
+    font-size: 26px;
   }
   #mapContainer {
     position: relative;
     width: 100vw;
     height: 90vh;
-    margin: 0 auto;
     background: #b3d1ff;
+    margin: 0 auto;
     overflow: hidden;
-    border: 3px solid #222;
+    border-top: 3px solid #222;
+    border-bottom: 3px solid #222;
   }
   canvas {
     width: 100%;
     height: 100%;
     cursor: grab;
+    touch-action: none;
   }
   canvas:active {
     cursor: grabbing;
@@ -37,7 +41,7 @@
 </style>
 </head>
 <body>
-<h1>🚄 Train Tracker — Zoom + Pan</h1>
+<h1>🚄 Train Tracker — Mobile + Desktop</h1>
 <div id="mapContainer">
   <canvas id="map" width="1920" height="1080"></canvas>
 </div>
@@ -46,30 +50,31 @@
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
 
-// Track & train data
+// Data
 let tracks = [];
 let trainPos = null;
 
-// View settings
-let scale = 0.4;          // zoom level
+// View control
+let scale = 0.5;
 let offsetX = canvas.width / 2;
 let offsetY = canvas.height / 2;
 
-// Drag variables
+// Mouse drag
 let isDragging = false;
 let lastMouseX, lastMouseY;
 
-// ===== DRAWING FUNCTIONS =====
+// Touch variables
+let lastTouchDistance = null;
+let lastTouchMid = null;
 
-// Draw smooth curve with thick rails
+// --- Draw functions ---
 function drawSmoothTrack(ctx, points) {
   if (points.length < 2) return;
-
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
 
-  // Outer black rail
-  ctx.lineWidth = 8 * scale;
+  // Outer black line
+  ctx.lineWidth = 10 * scale;
   ctx.strokeStyle = '#222';
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
@@ -83,8 +88,8 @@ function drawSmoothTrack(ctx, points) {
   ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
   ctx.stroke();
 
-  // Inner gray detail
-  ctx.lineWidth = 4 * scale;
+  // Inner gray
+  ctx.lineWidth = 5 * scale;
   ctx.strokeStyle = '#666';
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
@@ -99,7 +104,6 @@ function drawSmoothTrack(ctx, points) {
   ctx.stroke();
 }
 
-// Redraw everything
 function drawMap() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -111,14 +115,15 @@ function drawMap() {
 
   drawSmoothTrack(ctx, mapped);
 
+  // Train marker
   if (trainPos) {
     const x = trainPos.x;
     const y = -trainPos.z;
     ctx.fillStyle = '#ffcc00';
     ctx.beginPath();
-    ctx.arc(x, y, 25 / scale, 0, Math.PI * 2);
+    ctx.arc(x, y, 40 / scale, 0, Math.PI * 2);
     ctx.fill();
-    ctx.lineWidth = 3 / scale;
+    ctx.lineWidth = 5 / scale;
     ctx.strokeStyle = '#000';
     ctx.stroke();
   }
@@ -126,20 +131,14 @@ function drawMap() {
   ctx.restore();
 }
 
-// ===== INTERACTION =====
-
-// Zoom with scroll
-canvas.addEventListener('wheel', (e) => {
+// --- Mouse zoom/pan ---
+canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const zoomSpeed = 0.1;
   const prevScale = scale;
-  if (e.deltaY < 0) scale *= 1 + zoomSpeed;
-  else scale *= 1 - zoomSpeed;
-
-  // Clamp zoom
+  scale *= e.deltaY < 0 ? 1 + zoomSpeed : 1 - zoomSpeed;
   scale = Math.max(0.1, Math.min(3, scale));
 
-  // Zoom toward cursor
   const rect = canvas.getBoundingClientRect();
   const mouseX = e.clientX - rect.left;
   const mouseY = e.clientY - rect.top;
@@ -151,39 +150,87 @@ canvas.addEventListener('wheel', (e) => {
   drawMap();
 });
 
-// Drag to move view
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('mousedown', e => {
   isDragging = true;
   lastMouseX = e.clientX;
   lastMouseY = e.clientY;
 });
 window.addEventListener('mouseup', () => isDragging = false);
-canvas.addEventListener('mousemove', (e) => {
-  if (isDragging) {
-    const dx = e.clientX - lastMouseX;
-    const dy = e.clientY - lastMouseY;
-    offsetX += dx;
-    offsetY += dy;
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-    drawMap();
+canvas.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  offsetX += e.clientX - lastMouseX;
+  offsetY += e.clientY - lastMouseY;
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+  drawMap();
+});
+
+// --- Touch zoom/pan ---
+function getTouchMid(touches) {
+  const x = (touches[0].clientX + touches[1].clientX) / 2;
+  const y = (touches[0].clientY + touches[1].clientY) / 2;
+  return { x, y };
+}
+function getTouchDistance(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    lastMouseX = e.touches[0].clientX;
+    lastMouseY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    lastTouchDistance = getTouchDistance(e.touches);
+    lastTouchMid = getTouchMid(e.touches);
   }
 });
 
-// ===== DATA =====
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    // drag pan
+    const dx = e.touches[0].clientX - lastMouseX;
+    const dy = e.touches[0].clientY - lastMouseY;
+    offsetX += dx;
+    offsetY += dy;
+    lastMouseX = e.touches[0].clientX;
+    lastMouseY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    // pinch zoom
+    const newDist = getTouchDistance(e.touches);
+    const mid = getTouchMid(e.touches);
+    const zoomFactor = newDist / lastTouchDistance;
+    const prevScale = scale;
+    scale *= zoomFactor;
+    scale = Math.max(0.1, Math.min(3, scale));
+
+    const rect = canvas.getBoundingClientRect();
+    const dx = mid.x - rect.left - offsetX;
+    const dy = mid.y - rect.top - offsetY;
+    offsetX -= dx * (scale / prevScale - 1);
+    offsetY -= dy * (scale / prevScale - 1);
+
+    lastTouchDistance = newDist;
+    lastTouchMid = mid;
+  }
+  drawMap();
+});
+
+// --- Data ---
 fetch('tracks.json')
-  .then(res => res.json())
-  .then(data => {
-    tracks = data;
+  .then(r => r.json())
+  .then(d => {
+    tracks = d;
     drawMap();
   });
 
-// Update train position
 setInterval(() => {
   fetch('train.json')
-    .then(res => res.json())
-    .then(data => {
-      trainPos = data;
+    .then(r => r.json())
+    .then(d => {
+      trainPos = d;
       drawMap();
     })
     .catch(() => {});
